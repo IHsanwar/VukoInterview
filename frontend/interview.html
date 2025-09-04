@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interview - Vuko Interview</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="text-center">
+            <div class="spinner"></div>
+            <div class="loading-text" id="loadingText">Memproses permintaan Anda...</div>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
+        <div class="container">
+            <a class="navbar-brand" href="index.html">
+                <strong>Vuko Interview</strong>
+            </a>
+            <div class="d-flex align-items-center">
+                <span class="me-3">Halo, User</span>
+                <a href="dashboard.html" class="btn btn-outline-primary btn-sm">Dashboard</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2>Software Engineer Interview</h2>
+                    <div class="timer" id="timer">00:00</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <div class="question-card">
+                    <h3>Pertanyaan 1 dari 5</h3>
+                    <p class="lead mt-3">Ceritakan pengalaman kerja Anda yang paling menantang dan bagaimana Anda mengatasinya.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Rekam Jawaban Anda</h5>
+                        <p class="text-muted">Klik tombol di bawah untuk mulai merekam jawaban Anda.</p>
+                        
+                        <div class="recording-controls">
+                            <button id="startRecordBtn" class="btn btn-primary">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-mic" viewBox="0 0 16 16">
+                                    <path d="M3.5 6.5A.5.5 0 0 1 4 7v1a4 4 0 0 0 8 0V7a.5.5 0 0 1 1 0v1a5 5 0 0 1-4.5 4.975V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 .5-.5z"/>
+                                    <path d="M10 8a2 2 0 1 1-4 0V3a2 2 0 1 1 4 0v5zM8 0a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V3a3 3 0 0 0-3-3z"/>
+                                </svg>
+                                Mulai Rekam
+                            </button>
+                            <button id="stopRecordBtn" class="btn btn-danger" disabled>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-stop-fill" viewBox="0 0 16 16">
+                                    <path d="M5 3.5h6A1.5 1.5 0 0 1 12.5 5v6a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 11V5A1.5 1.5 0 0 1 5 3.5z"/>
+                                </svg>
+                                Stop Rekam
+                            </button>
+                            <button id="nextQuestionBtn" class="btn btn-success" disabled>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-right" viewBox="0 0 16 16">
+                                    <path fill-rule="evenodd" d="M1 8a.5.5 0 0 1 .5-.5h11.793l-3.147-3.146a.5.5 0 0 1 .708-.708l4 4a.5.5 0 0 1 0 .708l-4 4a.5.5 0 0 1-.708-.708L13.293 8.5H1.5A.5.5 0 0 1 1 8z"/>
+                                </svg>
+                                Pertanyaan Berikutnya
+                            </button>
+                        </div>
+                        
+                        <div class="mt-4" id="recordingStatus" style="display: none;">
+                            <div class="alert alert-info">
+                                <div class="d-flex align-items-center">
+                                    <div class="spinner-grow spinner-grow-sm me-2" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <span>Sedang merekam... Berbicaralah sekarang.</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Loading functions
+        function showLoading(message = "Memproses permintaan Anda...") {
+            document.getElementById('loadingText').textContent = message;
+            document.getElementById('loadingOverlay').classList.add('active');
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.remove('active');
+        }
+
+        // Timer functionality
+        let timerInterval;
+        let seconds = 0;
+        
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                seconds++;
+                const minutes = Math.floor(seconds / 60);
+                const remainingSeconds = seconds % 60;
+                document.getElementById('timer').textContent = 
+                    `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+            }, 1000);
+        }
+        
+        function stopTimer() {
+            clearInterval(timerInterval);
+        }
+
+        // Recording functionality (simulated)
+        let isRecording = false;
+        let mediaRecorder;
+        let audioChunks = [];
+
+        document.getElementById('startRecordBtn').addEventListener('click', function() {
+            showLoading("Memulai perekaman...");
+            
+            setTimeout(() => {
+                hideLoading();
+                isRecording = true;
+                document.getElementById('startRecordBtn').disabled = true;
+                document.getElementById('stopRecordBtn').disabled = false;
+                document.getElementById('recordingStatus').style.display = 'block';
+                startTimer();
+                
+                // Simulate recording
+                console.log("Recording started...");
+            }, 1000);
+        });
+
+        document.getElementById('stopRecordBtn').addEventListener('click', function() {
+            showLoading("Menghentikan perekaman...");
+            
+            setTimeout(() => {
+                hideLoading();
+                isRecording = false;
+                document.getElementById('startRecordBtn').disabled = false;
+                document.getElementById('stopRecordBtn').disabled = true;
+                document.getElementById('nextQuestionBtn').disabled = false;
+                document.getElementById('recordingStatus').style.display = 'none';
+                stopTimer();
+                
+                // Simulate recording stopped
+                console.log("Recording stopped...");
+            }, 1000);
+        });
+
+        document.getElementById('nextQuestionBtn').addEventListener('click', function() {
+            showLoading("Memproses jawaban dan menyimpan...");
+            
+            setTimeout(() => {
+                hideLoading();
+                alert("Jawaban berhasil disimpan! AI sedang menganalisis jawaban Anda.");
+                // Reset for next question
+                document.getElementById('nextQuestionBtn').disabled = true;
+                seconds = 0;
+                document.getElementById('timer').textContent = '00:00';
+            }, 2000);
+        });
+
+        // Initialize timer
+        document.getElementById('timer').textContent = '00:00';
+    </script>
+</body>
+</html>
