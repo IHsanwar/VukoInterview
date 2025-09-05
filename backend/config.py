@@ -13,9 +13,16 @@ class Config:
         'pool_pre_ping': True,
         'pool_recycle': 300,
     }
+    RABBITMQ_HOST = os.getenv("RABBITMQ_HOST")
+    RABBITMQ_PORT = int(os.getenv("RABBITMQ_PORT", 5672))
+    RABBITMQ_USER = os.getenv("RABBITMQ_USER")
+    RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD")
+    RABBITMQ_VHOST = os.getenv("RABBITMQ_VHOST", "/")
+
+    
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'jwt-secret-string')
-    CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
-    CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
+
+
     OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
     UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'uploads')
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size

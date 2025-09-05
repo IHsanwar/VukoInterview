@@ -3,13 +3,16 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
 import os
 import uuid
+import json
+import time
 
-from models.users import db
+from extensions import db
 from models.users import User
 from models.role import Role
 from models.question import Question
 from models.session import InterviewSession
 from models.answer import Answer
+from utils.rabbitmq_handler import rabbitmq_handler
 
 interview_bp = Blueprint('interview', __name__)
 
@@ -82,26 +85,40 @@ def upload_answer():
     if not session:
         return jsonify({'message': 'Invalid session'}), 400
     
+
+
     # Save file
     filename = f"{uuid.uuid4()}_{secure_filename(file.filename)}"
     file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
     file.save(file_path)
+    #if failed
     
+
     # Create answer record
     answer = Answer(
         session_id=session_id,
         question_id=question_id,
         audio_file_path=file_path
     )
-    
+    print (answer)
     db.session.add(answer)
     db.session.commit()
-    
-    # Trigger STT processing (Celery task)
-    from tasks.stt_processor import process_audio_to_text
-    process_audio_to_text.delay(answer.id)
+    print(f"SDB Succces")
+    # Trigger STT processing via RabbitMQ
+    try:
+        message = {
+            'answer_id': answer.id,
+            'timestamp': int(time.time())
+        }
+        
+        rabbitmq_handler.publish_message('stt_processing', message)
+        print(f"STT processing triggered for answer {answer.id}")
+        
+    except Exception as e:
+        print(f"Error triggering STT processing: {e}")
+        return jsonify({'message': 'Failed to trigger processing'}), 500
     
     return jsonify({
         'answer_id': answer.id,
-        'message': 'Audio uploaded successfully'
+        'message': 'Audio uploaded successfully. Processing started.'
     }), 201
