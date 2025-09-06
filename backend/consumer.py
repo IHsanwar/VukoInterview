@@ -4,7 +4,7 @@ import time
 import os
 import threading
 import traceback
-
+import whisper
 from config import Config
 from extensions import db
 from models.answer import Answer
@@ -14,7 +14,7 @@ import openai
 from app import create_app
 
 def process_audio_to_text(answer_id):
-    """Process audio file to text using OpenAI Whisper"""
+    """Process audio file to text using local Whisper (optionally polish with GPT)"""
     try:
         print(f"🔍 Starting STT processing for answer {answer_id}")
         app = create_app()
@@ -37,21 +37,43 @@ def process_audio_to_text(answer_id):
                 print(f"❌ Audio file is empty")
                 return False
 
-            openai.api_key = Config.OPENAI_API_KEY
-            print(f"🔄 Sending to OpenAI Whisper API...")
-            with open(answer.audio_file_path, "rb") as audio_file:
-                transcript = openai.Audio.transcribe("whisper-1", audio_file)
+            # === STEP 1: Transkripsi pakai Whisper lokal ===
+            print("🔄 Loading local Whisper model...")
+            model = whisper.load_model("base")  # bisa ganti ke 'small', 'medium', 'large'
+            print("🔄 Running transcription locally...")
+            result = model.transcribe(answer.audio_file_path, fp16=False)
+            transcript_text = result["text"]
 
-            print(f"📝 OpenAI Whisper API response: {transcript}")
-            answer.transcript_text = transcript['text']
-            print(f"📝 Transcript: {answer.transcript_text[:100]}...")
+            print(f"📝 Local Whisper transcript: {transcript_text[:100]}...")
+            answer.transcript_text = transcript_text
 
+            # === STEP 2: Opsional - Rapihkan dengan GPT ===
+            try:
+                if Config.OPENAI_API_KEY:  # hanya jika API key ada
+                    openai.api_key = Config.OPENAI_API_KEY
+                    print("✨ Polishing transcript with GPT...")
+                    response = openai.ChatCompletion.create(
+                        model="gpt-3.5-turbo",
+                        messages=[
+                            {"role": "system", "content": "Anda adalah asisten yang merapikan hasil transkrip audio tanpa mengubah makna."},
+                            {"role": "user", "content": transcript_text}
+                        ],
+                        max_tokens=1000,
+                        temperature=0.2
+                    )
+                    polished_text = response.choices[0].message.content.strip()
+                    print(f"📝 Polished transcript: {polished_text[:100]}...")
+                    answer.transcript_text = polished_text
+            except Exception as e:
+                print(f"⚠️ Skipping GPT polish due to error: {e}")
+
+            # === STEP 3: Simpan ke database ===
             try:
                 print("💾 Committing transcript to database...")
                 db.session.commit()
                 print(f"✅ Transcript saved to database for answer {answer_id}")
                 
-                # 🔥 PENTING: Trigger feedback analysis setelah STT selesai
+                # 🔥 Trigger feedback analysis setelah STT selesai
                 print(f"🚀 Triggering feedback analysis for answer {answer_id}")
                 trigger_feedback_analysis(answer_id)
                 
@@ -61,6 +83,7 @@ def process_audio_to_text(answer_id):
                 traceback.print_exc()
                 db.session.rollback()
                 return False
+
     except Exception as e:
         print(f"❌ Error processing audio for answer {answer_id}: {str(e)}")
         traceback.print_exc()
@@ -126,7 +149,6 @@ def callback_stt(ch, method, properties, body):
 
 
 def analyze_answer_feedback(answer_id):
-    """Analyze answer transcript and generate feedback using LLM"""
     try:
         print(f"🔍 Starting feedback analysis for answer {answer_id}")
         app = create_app()

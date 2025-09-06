@@ -13,3 +13,7 @@ openai==0.28.1
 requests==2.31.0
 gunicorn==21.2.0
 threading
+whisper
+opencv-python
+face_recognition
+numpy

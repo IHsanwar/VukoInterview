@@ -10,7 +10,7 @@ from utils.rabbitmq_handler import rabbitmq_handler
 from tasks.stt_processor import start_stt_worker
 from tasks.feedback_analyzer import start_feedback_worker
 from extensions import db, jwt, migrate
-
+from routes.detect_face import face_bp
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
@@ -29,7 +29,8 @@ def create_app():
     
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(interview_bp, url_prefix='/api/interview')
-     
+    
+    app.register_blueprint(face_bp, url_prefix='/api/face')
     
     return app
 
