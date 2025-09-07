@@ -14,7 +14,7 @@ const Interview = () => {
   const timerRef = useRef(null);
   const navigate = useNavigate();
   const webcamRef = useRef(null);
-
+const streamRef = useRef(null); // simpan stream global
   // Start new session
   useEffect(() => {
     startNewSession();
@@ -25,32 +25,60 @@ const Interview = () => {
   }, []);
 
   // Start webcam
-  useEffect(() => {
-    const startWebcam = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { width: 640, height: 480 }, 
-          audio: true 
-        });
-        if (webcamRef.current) {
-          webcamRef.current.srcObject = stream;
-        }
-        console.log('Webcam stream ready');
-      } catch (err) {
-        console.error("Error accessing webcam:", err);
-        setError("Tidak bisa mengakses kamera: " + err.message);
-      }
-    };
+ 
+   useEffect(() => {
+  const startWebcam = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { width: 640, height: 480 }, 
+        audio: true 
+      });
 
-    startWebcam();
+          if (webcamRef.current) {
+      webcamRef.current.srcObject = stream;
+      webcamRef.current.play().catch(err => console.error("Video play error:", err));
+}
 
-    return () => {
-      if (webcamRef.current && webcamRef.current.srcObject) {
-        const tracks = webcamRef.current.srcObject.getTracks();
-        tracks.forEach(track => track.stop());
-      }
-    };
-  }, []);
+      streamRef.current = stream; // simpan ke ref
+      console.log('Webcam stream ready');
+    } catch (err) {
+      console.error("Error accessing webcam:", err);
+      setError("Tidak bisa mengakses kamera: " + err.message);
+    }
+  };
+
+  startWebcam();
+
+  return () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+    }
+  };
+}, []);
+  // Tambahkan state untuk track kamera
+const [cameraStarted, setCameraStarted] = useState(false);
+
+const startWebcam = async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 640, height: 480 },
+      audio: true,
+    });
+
+    if (webcamRef.current) {
+      webcamRef.current.srcObject = stream;
+      await webcamRef.current.play();
+    }
+
+    streamRef.current = stream; // simpan stream global
+    setCameraStarted(true);
+    console.log('Webcam started successfully');
+  } catch (err) {
+    console.error('Error accessing webcam:', err);
+    setError('Tidak bisa mengakses kamera: ' + err.message);
+  }
+};
+
 
   const startNewSession = async () => {
     try {
@@ -98,67 +126,40 @@ const Interview = () => {
   };
 
   const startRecording = async () => {
-    try {
-      console.log('Starting recording process...');
-      
-      // Tunggu stream tersedia
-      let stream;
-      try {
-        stream = await waitForStream();
-        console.log('Stream acquired:', stream);
-      } catch (waitError) {
-        // Fallback: coba dapatkan stream langsung
-        if (webcamRef.current && webcamRef.current.srcObject instanceof MediaStream) {
-          stream = webcamRef.current.srcObject;
-          console.log('Using direct stream');
-        } else {
-          throw new Error('Stream kamera belum tersedia');
-        }
-      }
+  try {
+    console.log('Starting recording process...');
 
-      // Validasi stream
-      if (!stream || !(stream instanceof MediaStream)) {
-        throw new Error('Stream tidak valid');
-      }
-
-      // Reset chunks
-      videoChunksRef.current = [];
-      
-      // Cek MIME type yang didukung
-      const mimeType = getSupportedMimeType();
-      
-      // Buat MediaRecorder
-      mediaRecorderRef.current = new MediaRecorder(stream, { mimeType });
-
-      // Event handlers
-      mediaRecorderRef.current.ondataavailable = (event) => {
-        console.log('Data available:', event.data.size);
-        if (event.data.size > 0) {
-          videoChunksRef.current.push(event.data);
-        }
-      };
-
-      mediaRecorderRef.current.onstop = () => {
-        console.log('Recorder stopped, chunks length:', videoChunksRef.current.length);
-        uploadRecording();
-      };
-
-      mediaRecorderRef.current.onerror = (event) => {
-        console.error('Recorder error:', event.error);
-        setError('Error saat merekam: ' + event.error.message);
-      };
-
-      // Start recording dengan time slice 1 detik
-      mediaRecorderRef.current.start(1000);
-      setIsRecording(true);
-      startTimer();
-      
-      console.log('Recording started with MIME type:', mimeType);
-    } catch (err) {
-      console.error('Start recording error:', err);
-      setError("Gagal merekam: " + err.message);
+    let stream = streamRef.current; // ambil langsung dari ref
+    if (!stream) {
+      throw new Error('Stream kamera belum tersedia');
     }
-  };
+
+    // Reset chunks
+    videoChunksRef.current = [];
+
+    const mimeType = getSupportedMimeType();
+    mediaRecorderRef.current = new MediaRecorder(stream, { mimeType });
+
+    mediaRecorderRef.current.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        videoChunksRef.current.push(event.data);
+      }
+    };
+
+    mediaRecorderRef.current.onstop = () => {
+      uploadRecording();
+    };
+
+    mediaRecorderRef.current.start(1000);
+    setIsRecording(true);
+    startTimer();
+
+    console.log('Recording started with MIME type:', mimeType);
+  } catch (err) {
+    console.error('Start recording error:', err);
+    setError("Gagal merekam: " + err.message);
+  }
+};
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
@@ -171,6 +172,54 @@ const Interview = () => {
       }
     }
   };
+
+
+const captureFace = async () => {
+  if (!webcamRef.current) {
+    alert("Webcam belum siap");
+    return;
+  }
+
+  // Pastikan video ada frame
+  const video = webcamRef.current;
+  const width = video.videoWidth || 640;
+  const height = video.videoHeight || 480;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(video, 0, 0, width, height);
+
+  // Convert ke base64 dengan kualitas 90%
+  const imgBase64 = canvas.toDataURL("image/jpeg", 0.9);
+  console.log("Base64 preview:", imgBase64.slice(0, 50) + "...");
+
+  try {
+    const response = await fetch("http://localhost:5000/api/face/detect-face", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: imgBase64 }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
+    }
+    
+    const data = await response.json();
+
+    if (data.face_count > 0) {
+      alert(`✅ Wajah terdeteksi: ${data.face_count}`);
+    } else {
+      alert("⚠️ Tidak ada wajah terdeteksi.");
+    }
+  } catch (err) {
+    console.error("Face detection error:", err);
+    alert("❌ Gagal mendeteksi wajah: " + err.message);
+  }
+};
 
   const startTimer = () => {
     setSeconds(0);
@@ -280,6 +329,8 @@ const Interview = () => {
         </div>
       )}
 
+
+
       <div className="question-card mb-4">
         <h4>
           Pertanyaan {currentQuestionIndex + 1} dari {questions.length}
@@ -310,6 +361,9 @@ const Interview = () => {
             >
               <i className="bi bi-stop-fill"></i> Stop Rekam
             </button>
+          <button className="btn btn-warning" onClick={captureFace}>
+  <i className="bi bi-person-bounding-box"></i> Deteksi Wajah
+</button>
 
             <button
               className="btn btn-success"
@@ -336,6 +390,17 @@ const Interview = () => {
       {/* Webcam Preview */}
       <div className="text-center">
         <h5 className="mb-3">Kamera Anda</h5>
+        
+        {/* Tombol start kamera */}
+{!cameraStarted && (
+  <button
+    className="btn btn-secondary mb-3"
+    onClick={startWebcam}
+  >
+    <i className="bi bi-camera-video"></i> Start Kamera
+  </button>
+)}
+
         <video
           ref={webcamRef}
           autoPlay

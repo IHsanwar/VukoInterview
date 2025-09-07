@@ -69,11 +69,10 @@ def get_questions(session_id):
 def upload_answer():
     user_id = get_jwt_identity()
     
-    # Check if file is present
-    if 'audio' not in request.files:
-        return jsonify({'message': 'No audio file provided'}), 400
+    file = request.files.get('audio') or request.files.get('video')
+    if not file:
+        return jsonify({'message': 'No media file provided'}), 400
     
-    file = request.files['audio']
     session_id = request.form.get('session_id')
     question_id = request.form.get('question_id')
     
