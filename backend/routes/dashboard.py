@@ -52,4 +52,5 @@ def get_answer_details(answer_id):
         "transcript_text": ans.transcript_text,
         "feedback": ans.feedback,
         "summary": ans.summary,}
+    
     return jsonify(details), 200
