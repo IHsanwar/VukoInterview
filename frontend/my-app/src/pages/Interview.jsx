@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { interviewAPI } from '../services/api';
+import React, { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { interviewAPI } from "../services/api";
 
 const Interview = () => {
   const [sessionId, setSessionId] = useState(null);
@@ -8,89 +8,69 @@ const Interview = () => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
+  const [initialized, setInitialized] = useState(false);
+  const [faceWarning, setFaceWarning] = useState("");
+  const [cameraStarted, setCameraStarted] = useState(false);
+
   const videoChunksRef = useRef([]);
   const mediaRecorderRef = useRef(null);
   const timerRef = useRef(null);
-  const navigate = useNavigate();
+  const streamRef = useRef(null);
   const webcamRef = useRef(null);
-const streamRef = useRef(null); // simpan stream global
-  // Start new session
-  useEffect(() => {
-    startNewSession();
 
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, []);
+  const navigate = useNavigate();
 
-  // Start webcam
- 
-   useEffect(() => {
+  // --- Start webcam function ---
   const startWebcam = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { width: 640, height: 480 }, 
-        audio: true 
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480 },
+        audio: true,
       });
 
-          if (webcamRef.current) {
-      webcamRef.current.srcObject = stream;
-      webcamRef.current.play().catch(err => console.error("Video play error:", err));
-}
+      if (webcamRef.current) {
+        webcamRef.current.srcObject = stream;
+        await webcamRef.current.play().catch((err) => {
+          console.error("Video play error:", err);
+        });
+      }
 
-      streamRef.current = stream; // simpan ke ref
-      console.log('Webcam stream ready');
+      streamRef.current = stream;
+      setCameraStarted(true);
+      console.log("Webcam started");
     } catch (err) {
       console.error("Error accessing webcam:", err);
       setError("Tidak bisa mengakses kamera: " + err.message);
     }
   };
 
-  startWebcam();
+  // --- Cleanup kamera saat unmount ---
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, []);
 
-  return () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-    }
-  };
-}, []);
-  // Tambahkan state untuk track kamera
-const [cameraStarted, setCameraStarted] = useState(false);
-
-const startWebcam = async () => {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: 640, height: 480 },
-      audio: true,
-    });
-
-    if (webcamRef.current) {
-      webcamRef.current.srcObject = stream;
-      await webcamRef.current.play();
-    }
-
-    streamRef.current = stream; // simpan stream global
-    setCameraStarted(true);
-    console.log('Webcam started successfully');
-  } catch (err) {
-    console.error('Error accessing webcam:', err);
-    setError('Tidak bisa mengakses kamera: ' + err.message);
-  }
-};
-
-
+  // --- Start new session ---
   const startNewSession = async () => {
     try {
       const rolesResponse = await interviewAPI.getRoles();
       const roleId = rolesResponse.data[0]?.id || 1;
-      
-      const sessionResponse = await interviewAPI.startSession({ role_id: roleId });
+
+      const sessionResponse = await interviewAPI.startSession({
+        role_id: roleId,
+      });
       setSessionId(sessionResponse.data.session_id);
-      
+
       await loadQuestions(sessionResponse.data.session_id);
     } catch (err) {
-      setError('Gagal memulai sesi interview: ' + (err.response?.data?.message || err.message));
+      setError(
+        "Gagal memulai sesi interview: " +
+          (err.response?.data?.message || err.message)
+      );
     }
   };
 
@@ -99,71 +79,55 @@ const startWebcam = async () => {
       const response = await interviewAPI.getQuestions(sessionId);
       setQuestions(response.data);
     } catch (err) {
-      setError('Gagal memuat pertanyaan: ' + (err.response?.data?.message || err.message));
+      setError(
+        "Gagal memuat pertanyaan: " +
+          (err.response?.data?.message || err.message)
+      );
     }
   };
 
-  // Fungsi untuk menunggu stream tersedia
-  const waitForStream = () => {
-    return new Promise((resolve, reject) => {
-      let attempts = 0;
-      const maxAttempts = 50; // 5 detik (50 * 100ms)
-      
-      const checkStream = () => {
-        attempts++;
-        if (webcamRef.current && webcamRef.current.srcObject instanceof MediaStream) {
-          console.log('Stream found after', attempts, 'attempts');
-          resolve(webcamRef.current.srcObject);
-        } else if (attempts >= maxAttempts) {
-          reject(new Error('Stream tidak tersedia setelah menunggu'));
-        } else {
-          setTimeout(checkStream, 100);
+  // --- Init session ---
+  useEffect(() => {
+    if (!initialized) {
+      startNewSession();
+      setInitialized(true);
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [initialized]);
+
+  // --- Recording ---
+  const startRecording = async () => {
+    try {
+      let stream = streamRef.current;
+      if (!stream) throw new Error("Stream kamera belum tersedia");
+
+      videoChunksRef.current = [];
+      const mimeType = getSupportedMimeType();
+      mediaRecorderRef.current = new MediaRecorder(stream, { mimeType });
+
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          videoChunksRef.current.push(event.data);
         }
       };
-      
-      checkStream();
-    });
-  };
 
-  const startRecording = async () => {
-  try {
-    console.log('Starting recording process...');
+      mediaRecorderRef.current.onstop = () => {
+        uploadRecording();
+      };
 
-    let stream = streamRef.current; // ambil langsung dari ref
-    if (!stream) {
-      throw new Error('Stream kamera belum tersedia');
+      mediaRecorderRef.current.start(1000);
+      setIsRecording(true);
+      startTimer();
+    } catch (err) {
+      console.error("Start recording error:", err);
+      setError("Gagal merekam: " + err.message);
     }
-
-    // Reset chunks
-    videoChunksRef.current = [];
-
-    const mimeType = getSupportedMimeType();
-    mediaRecorderRef.current = new MediaRecorder(stream, { mimeType });
-
-    mediaRecorderRef.current.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        videoChunksRef.current.push(event.data);
-      }
-    };
-
-    mediaRecorderRef.current.onstop = () => {
-      uploadRecording();
-    };
-
-    mediaRecorderRef.current.start(1000);
-    setIsRecording(true);
-    startTimer();
-
-    console.log('Recording started with MIME type:', mimeType);
-  } catch (err) {
-    console.error('Start recording error:', err);
-    setError("Gagal merekam: " + err.message);
-  }
-};
+  };
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
-      console.log('Stopping recording...');
       mediaRecorderRef.current.stop();
       setIsRecording(false);
       if (timerRef.current) {
@@ -173,134 +137,172 @@ const startWebcam = async () => {
     }
   };
 
-
-const captureFace = async () => {
-  if (!webcamRef.current) {
-    alert("Webcam belum siap");
-    return;
-  }
-
-  // Pastikan video ada frame
-  const video = webcamRef.current;
-  const width = video.videoWidth || 640;
-  const height = video.videoHeight || 480;
-
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(video, 0, 0, width, height);
-
-  // Convert ke base64 dengan kualitas 90%
-  const imgBase64 = canvas.toDataURL("image/jpeg", 0.9);
-  console.log("Base64 preview:", imgBase64.slice(0, 50) + "...");
-
-  try {
-    const response = await fetch("http://localhost:5000/api/face/detect-face", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image: imgBase64 }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`HTTP ${response.status}: ${errorText}`);
+  // --- Face capture ---
+  const captureFace = async () => {
+    if (!webcamRef.current) {
+      alert("Webcam belum siap");
+      return;
     }
-    
-    const data = await response.json();
+    const video = webcamRef.current;
+    const width = video.videoWidth || 640;
+    const height = video.videoHeight || 480;
 
-    if (data.face_count > 0) {
-      alert(`✅ Wajah terdeteksi: ${data.face_count}`);
-    } else {
-      alert("⚠️ Tidak ada wajah terdeteksi.");
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, width, height);
+
+    const imgBase64 = canvas.toDataURL("image/jpeg", 0.9);
+
+    try {
+      const response = await fetch(
+        "http://localhost:5000/api/face/detect-face",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: imgBase64 }),
+        }
+      );
+
+      const data = await response.json();
+      if (data.face_count > 0) {
+        alert(`✅ Wajah terdeteksi: ${data.face_count}`);
+      } else {
+        alert("⚠️ Tidak ada wajah terdeteksi.");
+      }
+    } catch (err) {
+      console.error("Face detection error:", err);
+      alert("❌ Gagal mendeteksi wajah: " + err.message);
     }
-  } catch (err) {
-    console.error("Face detection error:", err);
-    alert("❌ Gagal mendeteksi wajah: " + err.message);
-  }
-};
+  };
 
+  // --- Timer ---
   const startTimer = () => {
     setSeconds(0);
     timerRef.current = setInterval(() => {
-      setSeconds(prev => prev + 1);
+      setSeconds((prev) => prev + 1);
     }, 1000);
   };
 
+  // --- Upload video ---
   const uploadRecording = async () => {
-    console.log('Upload recording called, chunks:', videoChunksRef.current.length);
-    
     if (videoChunksRef.current.length === 0) {
       setError("Tidak ada data untuk diunggah.");
       return;
     }
-
     try {
-      // Buat blob dari chunks
-      const videoBlob = new Blob(videoChunksRef.current, { type: 'video/webm' });
-      console.log('Blob size:', videoBlob.size);
-      
+      const videoBlob = new Blob(videoChunksRef.current, { type: "video/webm" });
       if (videoBlob.size === 0) {
         setError("File rekaman kosong.");
         return;
       }
-
-      // Buat FormData
       const formData = new FormData();
-      formData.append('video', videoBlob, 'recording.webm');
-      formData.append('session_id', sessionId);
-      formData.append('question_id', questions[currentQuestionIndex].id);
-      
-      console.log('Uploading file size:', videoBlob.size);
-      console.log('Session ID:', sessionId);
-      console.log('Question ID:', questions[currentQuestionIndex].id);
+      formData.append("video", videoBlob, "recording.webm");
+      formData.append("session_id", sessionId);
+      formData.append("question_id", questions[currentQuestionIndex].id);
 
-      // Upload ke backend
-      const response = await interviewAPI.uploadAnswer(formData);
-      console.log('Upload response:', response.data);
-      
-      alert('Jawaban berhasil disimpan!');
+      await interviewAPI.uploadAnswer(formData);
+      alert("Jawaban berhasil disimpan!");
     } catch (err) {
-      console.error('Upload error:', err);
-      setError('Gagal mengunggah jawaban: ' + (err.response?.data?.message || err.message));
+      setError(
+        "Gagal mengunggah jawaban: " +
+          (err.response?.data?.message || err.message)
+      );
+    }
+  };
+
+  const finishInterview = async () => {
+    try {
+      await interviewAPI.completeSession({ session_id: sessionId });
+      alert("Interview selesai!");
+      navigate("/dashboard");
+    } catch (err) {
+      setError(
+        "Gagal menyelesaikan sesi: " +
+          (err.response?.data?.message || err.message)
+      );
     }
   };
 
   const nextQuestion = () => {
     if (currentQuestionIndex < questions.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1);
+      setCurrentQuestionIndex((prev) => prev + 1);
       setSeconds(0);
     } else {
-      alert('Interview selesai!');
-      navigate('/dashboard');
+      finishInterview();
     }
   };
 
-  // Helper function untuk mendapatkan MIME type yang didukung
+  // --- Face check loop ---
+  const captureAndCheckFaces = async () => {
+    if (!webcamRef.current) return;
+    const video = webcamRef.current;
+    const width = video.videoWidth || 640;
+    const height = video.videoHeight || 480;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, width, height);
+    const imgBase64 = canvas.toDataURL("image/jpeg", 0.9);
+
+    try {
+      const response = await fetch(
+        "http://localhost:5000/api/face/detect-face",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: imgBase64 }),
+        }
+      );
+      const data = await response.json();
+      if (data.face_count > 1) {
+        setFaceWarning(
+          `⚠️ Terdeteksi ${data.face_count} wajah! Pastikan mengerjakan tes ini sendiri.`
+        );
+      } else {
+        setFaceWarning("");
+      }
+    } catch (err) {
+      console.error("Face detection error:", err);
+    }
+  };
+
+  useEffect(() => {
+    let intervalId;
+    if (cameraStarted) {
+      intervalId = setInterval(() => {
+        captureAndCheckFaces();
+      }, 10000);
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [cameraStarted]);
+
+  // --- Helpers ---
   const getSupportedMimeType = () => {
     const mimeTypes = [
-      'video/webm; codecs=vp9',
-      'video/webm; codecs=vp8',
-      'video/webm'
+      "video/webm; codecs=vp9",
+      "video/webm; codecs=vp8",
+      "video/webm",
     ];
-    
     for (let type of mimeTypes) {
-      if (MediaRecorder.isTypeSupported(type)) {
-        return type;
-      }
+      if (MediaRecorder.isTypeSupported(type)) return type;
     }
-    
-    // Fallback ke default
-    return 'video/webm';
+    return "video/webm";
   };
 
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    return `${mins.toString().padStart(2, "0")}:${secs
+      .toString()
+      .padStart(2, "0")}`;
   };
 
+  // --- UI ---
   if (!sessionId || questions.length === 0) {
     return (
       <div className="text-center">
@@ -329,8 +331,6 @@ const captureFace = async () => {
         </div>
       )}
 
-
-
       <div className="question-card mb-4">
         <h4>
           Pertanyaan {currentQuestionIndex + 1} dari {questions.length}
@@ -341,66 +341,46 @@ const captureFace = async () => {
       <div className="card mb-4">
         <div className="card-body">
           <h5 className="card-title">Rekam Jawaban Anda</h5>
-          <p className="text-muted">
-            Klik tombol di bawah untuk mulai merekam jawaban Anda.
-          </p>
-
           <div className="recording-controls mb-3 d-flex gap-2">
             <button
               className="btn btn-primary"
               onClick={startRecording}
               disabled={isRecording}
             >
-              <i className="bi bi-mic"></i> Mulai Rekam
+              Mulai Rekam
             </button>
-
             <button
               className="btn btn-danger"
               onClick={stopRecording}
               disabled={!isRecording}
             >
-              <i className="bi bi-stop-fill"></i> Stop Rekam
+              Stop Rekam
             </button>
-          <button className="btn btn-warning" onClick={captureFace}>
-  <i className="bi bi-person-bounding-box"></i> Deteksi Wajah
-</button>
-
+            <button className="btn btn-warning" onClick={captureFace}>
+              Deteksi Wajah
+            </button>
             <button
               className="btn btn-success"
               onClick={nextQuestion}
               disabled={isRecording}
             >
-              <i className="bi bi-arrow-right"></i> Pertanyaan Berikutnya
+              Pertanyaan Berikutnya
             </button>
           </div>
-
           {isRecording && (
-            <div className="alert alert-info">
-              <div className="d-flex align-items-center">
-                <div className="spinner-grow spinner-grow-sm me-2" role="status">
-                  <span className="visually-hidden">Loading...</span>
-                </div>
-                <span>Sedang merekam... Berbicaralah sekarang.</span>
-              </div>
-            </div>
+            <div className="alert alert-info">Sedang merekam...</div>
           )}
         </div>
       </div>
 
-      {/* Webcam Preview */}
+      {/* Webcam */}
       <div className="text-center">
         <h5 className="mb-3">Kamera Anda</h5>
-        
-        {/* Tombol start kamera */}
-{!cameraStarted && (
-  <button
-    className="btn btn-secondary mb-3"
-    onClick={startWebcam}
-  >
-    <i className="bi bi-camera-video"></i> Start Kamera
-  </button>
-)}
-
+        {!cameraStarted && (
+          <button className="btn btn-secondary mb-3" onClick={startWebcam}>
+            Start Kamera
+          </button>
+        )}
         <video
           ref={webcamRef}
           autoPlay
@@ -409,13 +389,16 @@ const captureFace = async () => {
           style={{
             width: "100%",
             maxWidth: "600px",
-            height: "auto",
             border: "2px solid #ccc",
             borderRadius: "10px",
-            backgroundColor: "#000"
+            backgroundColor: "#000",
           }}
         />
       </div>
+
+      {faceWarning && (
+        <div className="alert alert-warning mt-3">{faceWarning}</div>
+      )}
     </div>
   );
 };

@@ -3,7 +3,8 @@ import json
 import threading
 from config import Config
 import time
-
+import os
+import dotenv
 class RabbitMQHandler:
     def __init__(self):
         self.connection = None
@@ -13,7 +14,7 @@ class RabbitMQHandler:
     def connect(self):
         
         try:
-            url = "amqps://zyxugwqh:5ZOoSHJxcUJBg-zaeZ6HfXgA4zuPjHQA@fuji-01.lmq.cloudamqp.com/zyxugwqh"
+            url = LOADOTENV_RABBITMQ_URL = os.getenv('RABBITMQ_URL')
             print("Connecting with URL:", url)
 
             parameters = pika.URLParameters(url)

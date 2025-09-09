@@ -9,10 +9,11 @@ from config import Config
 from extensions import db
 from models.answer import Answer
 from models.question import Question
+import dotenv
 
 import openai
 from app import create_app
-
+dotenv.load_dotenv()
 def process_audio_to_text(answer_id):
     """Process audio file to text using local Whisper (optionally polish with GPT)"""
     try:
@@ -37,25 +38,27 @@ def process_audio_to_text(answer_id):
                 print(f"❌ Audio file is empty")
                 return False
 
-            # === STEP 1: Transkripsi pakai Whisper lokal ===
             print("🔄 Loading local Whisper model...")
-            model = whisper.load_model("base")  # bisa ganti ke 'small', 'medium', 'large'
+            model = whisper.load_model("base")  
+
             print("🔄 Running transcription locally...")
-            result = model.transcribe(answer.audio_file_path, fp16=False)
+            result = model.transcribe(answer.audio_file_path, fp16=False, language='id',temperature=0)
             transcript_text = result["text"]
 
             print(f"📝 Local Whisper transcript: {transcript_text[:100]}...")
             answer.transcript_text = transcript_text
 
-            # === STEP 2: Opsional - Rapihkan dengan GPT ===
             try:
-                if Config.OPENAI_API_KEY:  # hanya jika API key ada
+                if Config.OPENAI_API_KEY:  
                     openai.api_key = Config.OPENAI_API_KEY
                     print("✨ Polishing transcript with GPT...")
                     response = openai.ChatCompletion.create(
-                        model="gpt-3.5-turbo",
+                        model="gpt-4o",
                         messages=[
-                            {"role": "system", "content": "Anda adalah asisten yang merapikan hasil transkrip audio tanpa mengubah makna."},
+                            {"role": "system", "content": "Anda adalah asisten yang merapikan"
+                            " hasil transkrip audio tanpa mengubah makna atau materi yang dibahas, "
+                            "pastikan hanya merapikan kata yang berantakan."},
+
                             {"role": "user", "content": transcript_text}
                         ],
                         max_tokens=1000,
@@ -92,8 +95,7 @@ def process_audio_to_text(answer_id):
 def trigger_feedback_analysis(answer_id):
     """Trigger feedback analysis via RabbitMQ"""
     try:
-        # 🔥 PENTING: Kirim pesan ke queue feedback_analysis
-        url = "amqps://zyxugwqh:5ZOoSHJxcUJBg-zaeZ6HfXgA4zuPjHQA@fuji-01.lmq.cloudamqp.com/zyxugwqh"
+        url = os.getenv('RABBITMQ_URL')
         parameters = pika.URLParameters(url)
         parameters.heartbeat = 600
         parameters.blocked_connection_timeout = 300
@@ -272,7 +274,7 @@ def callback_feedback(ch, method, properties, body):
         ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
 
 def main():
-    url = "amqps://zyxugwqh:5ZOoSHJxcUJBg-zaeZ6HfXgA4zuPjHQA@fuji-01.lmq.cloudamqp.com/zyxugwqh"
+    url = LOADOTENV_RABBITMQ_URL = os.getenv('RABBITMQ_URL')
     parameters = pika.URLParameters(url)
     parameters.heartbeat = 600
     parameters.blocked_connection_timeout = 300

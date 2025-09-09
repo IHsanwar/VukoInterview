@@ -18,6 +18,7 @@ def create_app():
     # Initialize extensions
     db.init_app(app)
     jwt.init_app(app)
+    migrate.init_app(app, db)
     CORS(app)
     
     # Create upload folder
@@ -26,6 +27,8 @@ def create_app():
     # Register blueprints
     from routes.auth import auth_bp
     from routes.interview import interview_bp
+    from routes.dashboard import dashboard_bp
+    app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
     
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(interview_bp, url_prefix='/api/interview')
@@ -37,5 +40,4 @@ def create_app():
 if __name__ == '__main__':
     app = create_app()
     with app.app_context():
-        db.create_all()
-    app.run(debug=True, threaded=True)
+        app.run(debug=True, threaded=True)

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { interviewAPI } from '../services/api';
@@ -163,6 +164,17 @@ const AnswerDetail = () => {
                 )}
               </div>
               
+              <div className="mt-4">
+                <h5 className="mb-3">Video Jawaban</h5>
+                {answer.video_url ? (
+                  <video controls>
+                    <source src={answer.video_url} type="video/mp4" />
+                    Your browser does not support the video tag.
+                  </video>
+                ) : (
+                  <p className="text-muted">Video belum tersedia. Proses sedang berjalan...</p>
+                )}
+              </div>
               <hr />
               
               <div className="text-muted">

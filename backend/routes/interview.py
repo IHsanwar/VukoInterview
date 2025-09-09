@@ -86,14 +86,10 @@ def upload_answer():
     
 
 
-    # Save file
     filename = f"{uuid.uuid4()}_{secure_filename(file.filename)}"
     file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
     file.save(file_path)
-    #if failed
     
-
-    # Create answer record
     answer = Answer(
         session_id=session_id,
         question_id=question_id,
@@ -121,3 +117,19 @@ def upload_answer():
         'answer_id': answer.id,
         'message': 'Audio uploaded successfully. Processing started.'
     }), 201
+
+
+@interview_bp.route('/session-complete',methods =['DELETE'])
+@jwt_required()
+def complete_session():
+    user_id = get_jwt_identity()
+    data = request.get_json()
+    session_id = data.get('session_id')
+    delete_session = InterviewSession.query.filter_by(id=session_id,user_id=user_id).first()
+    if not delete_session:
+        return jsonify({'message': 'Session not found'}), 404
+
+    db.session.delete(delete_session)
+    db.session.commit()
+
+    return jsonify({'message': 'Session completed successfully'}), 200

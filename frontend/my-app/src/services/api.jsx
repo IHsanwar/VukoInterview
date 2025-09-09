@@ -25,7 +25,6 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor to handle 401
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -39,13 +38,11 @@ api.interceptors.response.use(
   }
 );
 
-// Auth endpoints
 export const authAPI = {
   register: (data) => api.post('/auth/register', data),
   login: (data) => api.post('/auth/login', data),
 };
 
-// Interview endpoints
 export const interviewAPI = {
   getRoles: () => api.get('/interview/roles'),
   startSession: (data) => api.post('/interview/start-session', data),
@@ -55,12 +52,11 @@ export const interviewAPI = {
       'Content-Type': 'multipart/form-data',
     },
   }),
-  getAnswerDetail: (answerId) => api.get(`/interview/answer/${answerId}`),
+  getAnswerDetail: (answerId) => api.get(`dashboard/answers/${answerId}`),
 };
 
-// Dashboard endpoints
 export const dashboardAPI = {
-  getAnswersHistory: () => api.get('/dashboard/answers/history'),
+  getAnswersHistory: () => api.get('/dashboard/history'),
 };
 
 export default api;
